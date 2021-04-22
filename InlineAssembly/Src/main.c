@@ -21,12 +21,27 @@
 
 int main(void)
 {
+#if 0
     /* Loop forever */
-	__asm volatile ("LDR R2,=#0x20001000");
-	__asm volatile ("LDR R3,=#0x20001004");
-	__asm volatile ("LDR R0,[R2]");
-	__asm volatile ("LDR R1,[R3]");
-	__asm volatile ("ADD R0,R0,R1");
-	__asm volatile ("STR R0,[R2]");
+	int var = 1;
+	__asm volatile ("MOV R0, %0"::"r"(var));
+
+	/* Constraint string = "r"
+	 * Constraint modififer = "="
+	 */
+	int control_register = 24;
+	__asm volatile ("MRS %0, CONTROL":"=r"(control_register));
+
+	/*Copy Content of C variable from one to another */
+	int var_1 = 10, var_2;
+	__asm volatile ("MOV %0, %1": "=r"(var_2): "r"(var_1));
+
+#endif
+	/*Copy Content of a pointer into a C variable using registers*/
+	int variable, *ptr;
+	ptr = (int *)0x20001000;
+	__asm volatile ("LDR %0, [%1]": "=r"(variable): "r"(ptr));
+
+
 	for(;;);
 }
