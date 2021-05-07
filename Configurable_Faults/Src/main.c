@@ -63,10 +63,25 @@ void BusFault_Handler(void) {
 
 }
 
-void UsageFault_Handler(void) {
+
+/* According to Procedure call standards, r0 will be used as the first argument in the callee */
+
+void UsageFault_Handler_c(void) {
+
+	__asm volatile("MRS r0, MSP");
+	/* Create C variable to hold the address of MSP
+	 * But create that variable in register, not in stack*/
+	register uint32_t msp_value __asm("r0");
+
+	/* Create a pointer to hold the address */
+	uint32_t *pMSP = (uint32_t*)msp_value;
+
+	printf("MSP value is  = %p\n", (pMSP));
+
 	uint32_t *pUFSR = (uint32_t*)0xE000ED2A;
 	printf("Usage Fault Handler\n");
 	printf("Fault Status Contents = %lx\n", ((*pUFSR) & 0xFFFF));
+
 	while(1);
 
 }
