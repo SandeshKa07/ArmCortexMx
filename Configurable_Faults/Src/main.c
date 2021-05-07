@@ -63,24 +63,34 @@ void BusFault_Handler(void) {
 
 }
 
+__attribute__((naked)) void UsageFault_Handler(void) {
+	/* Copy the MSP value to register r4 */
+	__asm volatile("MRS r0, MSP");
+
+	/*Branch to the C function */
+	__asm volatile("B UsageFault_Handler_c");
+
+}
 
 /* According to Procedure call standards, r0 will be used as the first argument in the callee */
 
-void UsageFault_Handler_c(void) {
+void UsageFault_Handler_c(uint32_t *pBaseStackFrame_from_asm) {
 
-	__asm volatile("MRS r0, MSP");
-	/* Create C variable to hold the address of MSP
-	 * But create that variable in register, not in stack*/
-	register uint32_t msp_value __asm("r0");
-
-	/* Create a pointer to hold the address */
-	uint32_t *pMSP = (uint32_t*)msp_value;
-
-	printf("MSP value is  = %p\n", (pMSP));
+	printf("Usage Fault Handler\n");
 
 	uint32_t *pUFSR = (uint32_t*)0xE000ED2A;
-	printf("Usage Fault Handler\n");
 	printf("Fault Status Contents = %lx\n", ((*pUFSR) & 0xFFFF));
+
+	printf("Base Stack Frame Address  = %p\n", pBaseStackFrame_from_asm);
+	printf("Value of R0  = %lx\n", pBaseStackFrame_from_asm[0]);
+	printf("Value of R1  = %lx\n", pBaseStackFrame_from_asm[1]);
+	printf("Value of R2  = %lx\n", pBaseStackFrame_from_asm[2]);
+	printf("Value of R3  = %lx\n", pBaseStackFrame_from_asm[3]);
+	printf("Value of R12  = %lx\n", pBaseStackFrame_from_asm[4]);
+	printf("Value of LR  = %lx\n", pBaseStackFrame_from_asm[5]);
+	printf("Value of PC  = %lx\n", pBaseStackFrame_from_asm[6]);
+	printf("Value of XPSR  = %lx\n", pBaseStackFrame_from_asm[7]);
+
 
 	while(1);
 
