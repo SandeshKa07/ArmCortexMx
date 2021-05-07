@@ -18,13 +18,55 @@
  */
 
 #include <stdint.h>
+#include <stdio.h>
 
 #if !defined(__SOFT_FP__) && defined(__ARM_FP)
   #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
 #endif
 
+/*Base address for System handler control status register */
+
+uint32_t *pSHCSR = (uint32_t *)0xE000ED24;
+
+
 int main(void)
 {
+
+	/*Enable the faults in SHCSR */
+
+	*pSHCSR |= (1<<18); /*Usage fault */
+	*pSHCSR |= (1<<17); /*Bus fault */
+	*pSHCSR |= (1<<16); /*Mem fault */
+
+	/* Trigger the fault by meeting certain conditions */
+	uint32_t *pUnexpected_Instruction = (uint32_t *)0x20001000;
+	*pUnexpected_Instruction = 0xFFFFFFFF;
+
+	void (*some_function_pointer)(void);
+	some_function_pointer = (void *)0x20001000;
+
+	some_function_pointer();
+
     /* Loop forever */
 	for(;;);
+}
+
+void MemManage_Handler(void) {
+	printf("MemManage Fault Handler\n");
+	while(1);
+
+}
+
+void BusFault_Handler(void) {
+	printf("Bus Fault Handler\n");
+	while(1);
+
+}
+
+void UsageFault_Handler(void) {
+	uint32_t *pUFSR = (uint32_t*)0xE000ED2A;
+	printf("Usage Fault Handler\n");
+	printf("Fault Status Contents = %lx\n", ((*pUFSR) & 0xFFFF));
+	while(1);
+
 }
