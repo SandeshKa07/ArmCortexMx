@@ -30,6 +30,11 @@ int main(void)
 
 	__asm ("SVC #5");
 
+	/* Get the updated value from the stack */
+
+	uint32_t returned_data = 0;
+	__asm volatile("MOV %0, R0":"r="(returned_data));
+	printf("Modified Value = %d\n", returned_data);
     /* Loop forever */
 	for(;;);
 }
@@ -48,4 +53,8 @@ void SVC_Handler_c(uint32_t *pBaseStackAddress){
 
 	uint8_t svc_number = *pcaddress;
 	printf("SVC address = %d\n", svc_number);
+
+	svc_number += 4;
+	/*Place the updated value in R0, since that will be used to return stack frame will be restored in thread mode*/
+	pBaseStackAddress[0] = svc_number;
 }
