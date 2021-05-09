@@ -18,26 +18,64 @@
  */
 
 #include <stdint.h>
+#include <stdio.h>
 
 #if !defined(__SOFT_FP__) && defined(__ARM_FP)
-  #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
+#warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
 #endif
+
+
+/*Mathematical operation functions */
+
+int32_t addition(int32_t x, int32_t y) {
+
+	__asm volatile("SVC #36");
+
+	int32_t result;
+	__asm volatile("MOV %0, R0": "=r"(result));
+	return result;
+
+}
+
+int32_t subtraction(int32_t x, int32_t y) {
+	__asm volatile("SVC #37");
+
+	int32_t result;
+	__asm volatile("MOV %0, R0": "=r"(result));
+	return result;
+
+}
+
+int32_t multiply(int32_t x, int32_t y) {
+	__asm volatile("SVC #38");
+
+	int32_t result;
+	__asm volatile("MOV %0, R0": "=r"(result));
+	return result;;
+}
+
+
+int32_t division(int32_t x, int32_t y) {
+	__asm volatile("SVC #39");
+
+	int32_t result;
+	__asm volatile("MOV %0, R0": "=r"(result));
+	return result;
+}
 
 int main(void)
 {
 
-	/*Generate the SVC exception */
+	printf("Addition Result = %d\n", addition(20, -10));
+	printf("Subtraction Result = %d\n", subtraction(20, -10));
+	printf("Multiplication Result = %d\n", multiply(20, -10));
+	printf("Division Result = %d\n", division(20, -10));
 
-	__asm ("SVC #5");
 
-	/* Get the updated value from the stack */
-
-	uint32_t returned_data = 0;
-	__asm volatile("MOV %0, R0":"r="(returned_data));
-	printf("Modified Value = %d\n", returned_data);
-    /* Loop forever */
+	/* Loop forever */
 	for(;;);
 }
+
 
 __attribute__((naked)) void SVC_Handler(void) {
 	__asm ("MRS R0, MSP");
@@ -54,7 +92,18 @@ void SVC_Handler_c(uint32_t *pBaseStackAddress){
 	uint8_t svc_number = *pcaddress;
 	printf("SVC address = %d\n", svc_number);
 
-	svc_number += 4;
-	/*Place the updated value in R0, since that will be used to return stack frame will be restored in thread mode*/
-	pBaseStackAddress[0] = svc_number;
+	switch(svc_number){
+	case 36:
+		pBaseStackAddress[0] = pBaseStackAddress[0] + pBaseStackAddress[1];
+		break;
+	case 37:
+		pBaseStackAddress[0] = pBaseStackAddress[0] - pBaseStackAddress[1];
+		break;
+	case 38:
+		pBaseStackAddress[0] = pBaseStackAddress[0] * pBaseStackAddress[1];
+		break;
+	case 39:
+		pBaseStackAddress[0] = pBaseStackAddress[0] / pBaseStackAddress[1];
+		break;
+	}
 }
