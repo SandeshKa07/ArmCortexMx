@@ -25,6 +25,27 @@
 
 int main(void)
 {
+
+	/*Generate the SVC exception */
+
+	__asm ("SVC #5");
+
     /* Loop forever */
 	for(;;);
+}
+
+__attribute__((naked)) void SVC_Handler(void) {
+	__asm ("MRS R0, MSP");
+	__asm ("B SVC_Handler_c");
+}
+
+
+void SVC_Handler_c(uint32_t *pBaseStackAddress){
+	printf("Inside SVC Handler C function\n");
+
+	uint8_t *pcaddress = (uint8_t *)pBaseStackAddress[6];
+	pcaddress -= 2;
+
+	uint8_t svc_number = *pcaddress;
+	printf("SVC address = %d\n", svc_number);
 }
