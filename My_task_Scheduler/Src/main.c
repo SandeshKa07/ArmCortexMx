@@ -18,13 +18,72 @@
  */
 
 #include <stdint.h>
+#include <stdio.h>
 
 #if !defined(__SOFT_FP__) && defined(__ARM_FP)
   #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
 #endif
 
+/* Function declaration */
+void task1_handler(void);
+void task2_handler(void);
+void task3_handler(void);
+void task4_handler(void);
+void init_systick_timer(uint32_t tick_hz);
+
+/* Configuring RAM START address, size and END address */
+#define SRAM_START 			0x20000000U
+#define SRAM_SIZE 			(40 * 1024)
+#define SRAM_END 			((SRAM_START) + (SRAM_SIZE))
+
+/* Each task will have 1KB stack size */
+#define TASK_STACK_SIZE 	1024
+
+/* Stack start address for each task */
+#define TASK_1_STACK 		SRAM_END
+#define TASK_2_STACK		((SRAM_END) - (1 * TASK_STACK_SIZE))
+#define TASK_3_STACK		((SRAM_END) - (2 * TASK_STACK_SIZE))
+#define TASK_4_STACK		((SRAM_END) - (3 * TASK_STACK_SIZE))
+#define TASK_SCHED_STACK	((SRAM_END) - (4 * TASK_STACK_SIZE))
+
+/*SYSTICK TIME CONFIGURATION */
+#define SYSTICK_CLOCK		9000000U
+#define TIME_HZ				9000
+
 int main(void)
 {
+	/* initialize the systick timer */
+	init_systick_timer(TIME_HZ);
     /* Loop forever */
 	for(;;);
+}
+
+void init_systick_timer(uint32_t tick_hz) {
+	/* -1 is, exception will be triggered only when the value is reloaded into downcounter
+	 * not when the counter hit zero. So there will an additional count which has to be reduced
+	 */
+	uint32_t count_value = (SYSTICK_CLOCK / tick_hz) - 1;
+
+	/* Store this count value in Systick Reload Value register */
+	uint32_t *pSYST_RVR = (uint32_t*)0xE000E014;
+
+	/* Clear the old value, only 24 bits are used, last 8 bits are reserverd */
+	*pSYST_RVR &= ~(0x00FFFFFF);
+
+	/* Save this count value to the register */
+	*pSYST_RVR = count_value;
+
+	/*Enable the timer to use processor clock, enable systick exceptions using
+	 * Systick Control and Status Register
+	 */
+	uint32_t *pSYST_CSR = (uint32_t*)0xE000E010;
+	*pSYST_CSR |= (1<<2); // Use processor as clock source
+	*pSYST_CSR |= (1<<1); // Enable the trigger of exception when clock hits 0.
+	*pSYST_CSR |= (1<<0); // Finally enable the systick timer
+}
+
+
+/* Handler here acts as scheduler, it performs context switching */
+void SysTick_Handler(void) {
+	printf("Inside SYstick Handler\n");
 }
