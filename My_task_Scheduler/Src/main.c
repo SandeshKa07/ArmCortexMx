@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include "main.h"
 
 #if !defined(__SOFT_FP__) && defined(__ARM_FP)
   #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
@@ -30,33 +31,44 @@ void task2_handler(void);
 void task3_handler(void);
 void task4_handler(void);
 void init_systick_timer(uint32_t tick_hz);
+__attribute__((naked)) void init_scheduler_stack(uint32_t scheduler_stack_start);
+void init_tasks_dummy_stack(void);
 
-/* Configuring RAM START address, size and END address */
-#define SRAM_START 			0x20000000U
-#define SRAM_SIZE 			(40 * 1024)
-#define SRAM_END 			((SRAM_START) + (SRAM_SIZE))
 
-/* Each task will have 1KB stack size */
-#define TASK_STACK_SIZE 	1024
+/*Keep an array for holding PSP of each task */
+uint32_t psp_of_each_task[MAX_TASKS] = {TASK_1_STACK, TASK_2_STACK, TASK_3_STACK, TASK_4_STACK};
 
-/* Stack start address for each task */
-#define TASK_1_STACK 		SRAM_END
-#define TASK_2_STACK		((SRAM_END) - (1 * TASK_STACK_SIZE))
-#define TASK_3_STACK		((SRAM_END) - (2 * TASK_STACK_SIZE))
-#define TASK_4_STACK		((SRAM_END) - (3 * TASK_STACK_SIZE))
-#define TASK_SCHED_STACK	((SRAM_END) - (4 * TASK_STACK_SIZE))
-
-/*SYSTICK TIME CONFIGURATION */
-#define SYSTICK_CLOCK		9000000U
-#define TIME_HZ				9000
+/* Array to keep the PC address for each tasks */
+uint32_t task_handlers_for_each_task[MAX_TASKS] = {};
 
 int main(void)
 {
+	/* initialize the Scheduler stack, it used MSP */
+	init_scheduler_stack(TASK_SCHED_STACK);
+
+	task_handlers_for_each_task[0] = (uint32_t)task1_handler;
+	task_handlers_for_each_task[1] = (uint32_t)task2_handler;
+	task_handlers_for_each_task[2] = (uint32_t)task3_handler;
+	task_handlers_for_each_task[3] = (uint32_t)task4_handler;
+
+	/* intialize the dummy stack frame for all tasks */
+	init_tasks_dummy_stack();
+
 	/* initialize the systick timer */
 	init_systick_timer(TIME_HZ);
+
     /* Loop forever */
 	for(;;);
 }
+
+
+__attribute__((naked)) void init_scheduler_stack(uint32_t scheduler_stack_start){
+	/* For function calls, the argument 1 will be held in R0, can be used directly */
+	__asm volatile("MSR MSP,R0");
+	__asm volatile("BX LR"); //BX copies value of LR to PC
+
+}
+
 
 void init_systick_timer(uint32_t tick_hz) {
 	/* -1 is, exception will be triggered only when the value is reloaded into downcounter
@@ -82,8 +94,51 @@ void init_systick_timer(uint32_t tick_hz) {
 	*pSYST_CSR |= (1<<0); // Finally enable the systick timer
 }
 
-
 /* Handler here acts as scheduler, it performs context switching */
 void SysTick_Handler(void) {
 	printf("Inside SYstick Handler\n");
+}
+
+void init_tasks_dummy_stack(void){
+
+	uint32_t *pPSP_of_task;
+
+	for(int iter = 0; iter < MAX_TASKS; iter ++) {
+		pPSP_of_task = (uint32_t*)psp_of_each_task[iter];
+
+		/* Full Descending, so Decrement the task pointer first, then update the value */
+		pPSP_of_task--;
+		*pPSP_of_task = DUMMY_XPSR; // 0x01000000
+
+		pPSP_of_task--;
+		*pPSP_of_task = task_handlers_for_each_task[iter];// PC of each stack
+
+		pPSP_of_task--;
+		*pPSP_of_task = 0xFFFFFFFD; // Link registers for each task
+
+		/* Initialize the general purpose register to 0 */
+		for(int j = 0; j < 13; j++) {
+			pPSP_of_task--;
+			*pPSP_of_task = 0;
+		}
+
+		psp_of_each_task[iter] = (uint32_t)pPSP_of_task;
+
+	}
+}
+
+void task1_handler(void) {
+
+}
+
+void task2_handler(void){
+
+}
+
+void task3_handler(void){
+
+}
+
+void task4_handler(void){
+
 }
