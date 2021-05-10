@@ -33,16 +33,24 @@ void task4_handler(void);
 void init_systick_timer(uint32_t tick_hz);
 __attribute__((naked)) void init_scheduler_stack(uint32_t scheduler_stack_start);
 void init_tasks_dummy_stack(void);
-
+void enable_all_fault_handlers(void);
+__attribute__((naked)) void change_sp_to_psp(void);
 
 /*Keep an array for holding PSP of each task */
 uint32_t psp_of_each_task[MAX_TASKS] = {TASK_1_STACK, TASK_2_STACK, TASK_3_STACK, TASK_4_STACK};
 
 /* Array to keep the PC address for each tasks */
-uint32_t task_handlers_for_each_task[MAX_TASKS] = {};
+uint32_t task_handlers_for_each_task[MAX_TASKS];
+
+/* Current task number */
+uint32_t current_task = 0; //Task 1 is running
 
 int main(void)
 {
+
+	/* Enable all the fault handlers */
+	enable_all_fault_handlers();
+
 	/* initialize the Scheduler stack, it used MSP */
 	init_scheduler_stack(TASK_SCHED_STACK);
 
@@ -51,11 +59,16 @@ int main(void)
 	task_handlers_for_each_task[2] = (uint32_t)task3_handler;
 	task_handlers_for_each_task[3] = (uint32_t)task4_handler;
 
+
 	/* intialize the dummy stack frame for all tasks */
 	init_tasks_dummy_stack();
 
 	/* initialize the systick timer */
 	init_systick_timer(TIME_HZ);
+
+	change_sp_to_psp();
+
+	task1_handler();
 
     /* Loop forever */
 	for(;;);
@@ -66,6 +79,21 @@ __attribute__((naked)) void init_scheduler_stack(uint32_t scheduler_stack_start)
 	/* For function calls, the argument 1 will be held in R0, can be used directly */
 	__asm volatile("MSR MSP,R0");
 	__asm volatile("BX LR"); //BX copies value of LR to PC
+
+}
+
+uint32_t get_current_task_psp(void){
+	return psp_of_each_task[current_task];
+}
+
+__attribute__((naked)) void change_sp_to_psp(void) {
+	__asm volatile("PUSH {LR}");
+	__asm volatile("BL get_current_task_psp");
+	__asm volatile("MSR PSP, R0");
+	__asm volatile("POP {LR}");
+	__asm volatile("MOV R0, #0x02");
+	__asm volatile("MSR CONTROL, R0");
+	__asm volatile("BX LR");// Go back to main function
 
 }
 
@@ -127,7 +155,34 @@ void init_tasks_dummy_stack(void){
 	}
 }
 
+void enable_all_fault_handlers(void){
+	uint32_t *pSCR = (uint32_t*)0xE000ED24;
+
+	*pSCR |= (1<<16); /*Enable Mem  Fault */
+	*pSCR |= (1<<17); /* Enable Bus Fault */
+	*pSCR |= (1<<18); /*Enable Usage Fault */
+}
+
+void MemManage_Handler(void) {
+	printf("MemMange Fault Handler\n");
+	while(1);
+}
+
+void BusFault_Handler(void) {
+	printf("Bus Fault Handler\n");
+	while(1);
+}
+
+void UsageFault_Handler(void) {
+	printf("Usage Fault Handler\n");
+	while(1);
+}
+
+
+
 void task1_handler(void) {
+	printf("Task 1 is Running\n");
+	while(1);
 
 }
 
