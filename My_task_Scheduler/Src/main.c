@@ -22,7 +22,7 @@
 #include "main.h"
 
 #if !defined(__SOFT_FP__) && defined(__ARM_FP)
-  #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
+#warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
 #endif
 
 /* Function declaration */
@@ -70,7 +70,7 @@ int main(void)
 
 	task1_handler();
 
-    /* Loop forever */
+	/* Loop forever */
 	for(;;);
 }
 
@@ -122,10 +122,6 @@ void init_systick_timer(uint32_t tick_hz) {
 	*pSYST_CSR |= (1<<0); // Finally enable the systick timer
 }
 
-/* Handler here acts as scheduler, it performs context switching */
-void SysTick_Handler(void) {
-	printf("Inside SYstick Handler\n");
-}
 
 void init_tasks_dummy_stack(void){
 
@@ -163,6 +159,61 @@ void enable_all_fault_handlers(void){
 	*pSCR |= (1<<18); /*Enable Usage Fault */
 }
 
+void save_psp_value_after_storing(uint32_t current_psp_stack_addr){
+	psp_of_each_task[current_task] = current_psp_stack_addr;
+}
+
+void update_next_task(void){
+	current_task++;
+	current_task %= MAX_TASKS;
+}
+
+/* Handler here acts as scheduler, it performs context switching */
+__attribute__((naked)) void SysTick_Handler(void) {
+
+	/* Context Saving
+	 * 1. Get the current running task's PSP value.
+	 * 2. Using that PSP value, store SF2 (R4 to R11)
+	 * 3. Save the current value of PSP.
+	 */
+
+	__asm volatile("MRS R0, PSP");
+
+	__asm volatile("STMDB R0!, {R4-R11}");
+
+	/*Before executing BL instructions, save content of LR */
+
+	__asm volatile("PUSH {LR}");
+	__asm volatile("BL save_psp_value_after_storing"); //R0 is used as argument to the functions and we have updated R0 value. Geez !!!!!!!!!
+
+
+	/* Context Retrieving
+	 * 1. Decide which task to run next
+	 * 1. Get the PSP value of the task to be executed.
+	 * 2. Using that PSP value, retrieve SF2(R4 to R11)
+	 *  On exception exit, anyways the SF1 will be restored.
+	 * 3. Update the PSP and exit.
+	 */
+
+	__asm volatile("BL update_next_task");
+
+	__asm volatile("BL get_current_task_psp"); //Returned value will be in R0.
+
+	__asm volatile("LDMIA R0!, {R4-R11}");
+
+	__asm volatile("MSR PSP, R0");
+
+	__asm volatile("POP {LR}");
+
+	__asm volatile("BX LR"); /*Manually switch back, because of naked function, prologue and epilogue is not present */
+
+}
+
+void HardFault_Handler(void){
+	printf("Hard Fault Handler\n");
+	while(1);
+}
+
 void MemManage_Handler(void) {
 	printf("MemMange Fault Handler\n");
 	while(1);
@@ -179,21 +230,28 @@ void UsageFault_Handler(void) {
 }
 
 
-
 void task1_handler(void) {
-	printf("Task 1 is Running\n");
-	while(1);
+
+	while(1){
+		printf("Task 1 is Running\n");
+	}
 
 }
 
 void task2_handler(void){
-
+	while(1){
+		printf("Task 2 is Running\n");
+	}
 }
 
 void task3_handler(void){
-
+	while(1){
+		printf("Task 3 is Running\n");
+	}
 }
 
 void task4_handler(void){
-
+	while(1){
+		printf("Task 4 is Running\n");
+	}
 }
