@@ -20,6 +20,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "main.h"
+#include "led.h"
 
 #if !defined(__SOFT_FP__) && defined(__ARM_FP)
 #warning "FPU is not initialized, but the project is compiling for an FPU. Please initialize the FPU before use."
@@ -45,6 +46,7 @@ uint32_t task_handlers_for_each_task[MAX_TASKS];
 /* Current task number */
 uint32_t current_task = 0; //Task 1 is running
 
+
 int main(void)
 {
 
@@ -62,6 +64,8 @@ int main(void)
 
 	/* intialize the dummy stack frame for all tasks */
 	init_tasks_dummy_stack();
+
+	led_init_all();
 
 	/* initialize the systick timer */
 	init_systick_timer(TIME_HZ);
@@ -201,7 +205,7 @@ __attribute__((naked)) void SysTick_Handler(void) {
 
 	__asm volatile("LDMIA R0!, {R4-R11}");
 
-	__asm volatile("MSR PSP, R0");
+	__asm volatile("MSR PSP, R0");// This is where the task1 is shifted to task2, context switching happens.
 
 	__asm volatile("POP {LR}");
 
@@ -233,25 +237,37 @@ void UsageFault_Handler(void) {
 void task1_handler(void) {
 
 	while(1){
-		printf("Task 1 is Running\n");
+		led_on(LED_GREEN);
+		delay(DELAY_COUNT_1S);
+		led_off(LED_GREEN);
+		delay(DELAY_COUNT_1S);
 	}
 
 }
 
 void task2_handler(void){
 	while(1){
-		printf("Task 2 is Running\n");
+		led_on(LED_ORANGE);
+		delay(DELAY_COUNT_500MS);
+		led_off(LED_ORANGE);
+		delay(DELAY_COUNT_500MS);
 	}
 }
 
 void task3_handler(void){
 	while(1){
-		printf("Task 3 is Running\n");
+		led_on(LED_BLUE);
+		delay(DELAY_COUNT_250MS);
+		led_off(LED_BLUE);
+		delay(DELAY_COUNT_250MS);
 	}
 }
 
 void task4_handler(void){
 	while(1){
-		printf("Task 4 is Running\n");
+		led_on(LED_RED);
+		delay(DELAY_COUNT_125MS);
+		led_off(LED_RED);
+		delay(DELAY_COUNT_125MS);
 	}
 }
