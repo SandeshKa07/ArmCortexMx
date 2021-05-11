@@ -192,8 +192,23 @@ void save_psp_value_after_storing(uint32_t current_psp_stack_addr){
 }
 
 void update_next_task(void){
-	current_task++;
-	current_task %= MAX_TASKS;
+
+	int state = TASK_BLOCKED_STATE;
+
+	for(int i = 0; i < MAX_TASKS; i++) {
+		current_task++;
+		current_task %= MAX_TASKS;
+		state = user_tasks[current_task].current_state;
+
+		if((state == TASK_RUNNING_STATE) && (current_task != 0))
+			break;
+	}
+
+		/*All tasks are in blocked state, so execute the idle task */
+	if(state != TASK_RUNNING_STATE){
+		current_task = 0;
+	}
+
 }
 
 void schedule(void){
@@ -206,11 +221,13 @@ void schedule(void){
 /* Put the calling function to blocked state and trigger the scheduler*/
 void task_delay(uint32_t tick_count) {
 
+	INTERRUPT_DISABLE();
 	if(current_task) {
 		user_tasks[current_task].block_count = global_tick_count + tick_count;
 		user_tasks[current_task].current_state = TASK_BLOCKED_STATE;
 		schedule();
 	}
+	INTERRUPT_ENABLE();
 }
 
 __attribute__((naked)) void PendSV_Handler(void) {
@@ -315,9 +332,9 @@ void task1_handler(void) {
 
 	while(1){
 		led_on(LED_GREEN);
-		delay(DELAY_COUNT_1S);
+		task_delay(2000);
 		led_off(LED_GREEN);
-		delay(DELAY_COUNT_1S);
+		task_delay(2000);
 	}
 
 }
@@ -325,26 +342,26 @@ void task1_handler(void) {
 void task2_handler(void){
 	while(1){
 		led_on(LED_ORANGE);
-		delay(DELAY_COUNT_500MS);
+		task_delay(1000);
 		led_off(LED_ORANGE);
-		delay(DELAY_COUNT_500MS);
+		task_delay(1000);
 	}
 }
 
 void task3_handler(void){
 	while(1){
 		led_on(LED_BLUE);
-		delay(DELAY_COUNT_250MS);
+		task_delay(500);
 		led_off(LED_BLUE);
-		delay(DELAY_COUNT_250MS);
+		task_delay(500);
 	}
 }
 
 void task4_handler(void){
 	while(1){
 		led_on(LED_RED);
-		delay(DELAY_COUNT_125MS);
+		task_delay(250);
 		led_off(LED_RED);
-		delay(DELAY_COUNT_125MS);
+		task_delay(250);
 	}
 }
