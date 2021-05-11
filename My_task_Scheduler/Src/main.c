@@ -31,20 +31,30 @@ void task1_handler(void);
 void task2_handler(void);
 void task3_handler(void);
 void task4_handler(void);
+void idle_task(void);
 void init_systick_timer(uint32_t tick_hz);
 __attribute__((naked)) void init_scheduler_stack(uint32_t scheduler_stack_start);
 void init_tasks_dummy_stack(void);
 void enable_all_fault_handlers(void);
 __attribute__((naked)) void change_sp_to_psp(void);
 
-/*Keep an array for holding PSP of each task */
-uint32_t psp_of_each_task[MAX_TASKS] = {TASK_1_STACK, TASK_2_STACK, TASK_3_STACK, TASK_4_STACK};
-
-/* Array to keep the PC address for each tasks */
-uint32_t task_handlers_for_each_task[MAX_TASKS];
 
 /* Current task number */
-uint32_t current_task = 0; //Task 1 is running
+uint32_t current_task = 1; //Task 1 is running
+
+uint32_t global_tick_count = 0;
+
+/* Create a Task Control Block to represent task state */
+
+typedef struct {
+	uint32_t psp_value;
+	uint32_t block_count;
+	uint32_t current_state;
+	void (*task_handler)(void);
+}TCB_t;
+
+
+TCB_t user_tasks[MAX_TASKS];
 
 
 int main(void)
@@ -55,12 +65,6 @@ int main(void)
 
 	/* initialize the Scheduler stack, it used MSP */
 	init_scheduler_stack(TASK_SCHED_STACK);
-
-	task_handlers_for_each_task[0] = (uint32_t)task1_handler;
-	task_handlers_for_each_task[1] = (uint32_t)task2_handler;
-	task_handlers_for_each_task[2] = (uint32_t)task3_handler;
-	task_handlers_for_each_task[3] = (uint32_t)task4_handler;
-
 
 	/* intialize the dummy stack frame for all tasks */
 	init_tasks_dummy_stack();
@@ -87,7 +91,7 @@ __attribute__((naked)) void init_scheduler_stack(uint32_t scheduler_stack_start)
 }
 
 uint32_t get_current_task_psp(void){
-	return psp_of_each_task[current_task];
+	return user_tasks[current_task].psp_value;
 }
 
 __attribute__((naked)) void change_sp_to_psp(void) {
@@ -129,17 +133,37 @@ void init_systick_timer(uint32_t tick_hz) {
 
 void init_tasks_dummy_stack(void){
 
+	/*Task 0 is always the idle task */
+	user_tasks[0].current_state = TASK_RUNNING_STATE;
+	user_tasks[1].current_state = TASK_RUNNING_STATE;
+	user_tasks[2].current_state = TASK_RUNNING_STATE;
+	user_tasks[3].current_state = TASK_RUNNING_STATE;
+	user_tasks[4].current_state = TASK_RUNNING_STATE;
+
+
+	user_tasks[0].psp_value = TASK_IDLE_STACK;
+	user_tasks[1].psp_value = TASK_1_STACK;
+	user_tasks[2].psp_value = TASK_2_STACK;
+	user_tasks[3].psp_value = TASK_3_STACK;
+	user_tasks[4].psp_value = TASK_4_STACK;
+
+	user_tasks[0].task_handler = idle_task;
+	user_tasks[1].task_handler = task1_handler;
+	user_tasks[2].task_handler = task2_handler;
+	user_tasks[3].task_handler = task3_handler;
+	user_tasks[4].task_handler = task4_handler;
+
 	uint32_t *pPSP_of_task;
 
 	for(int iter = 0; iter < MAX_TASKS; iter ++) {
-		pPSP_of_task = (uint32_t*)psp_of_each_task[iter];
+		pPSP_of_task = (uint32_t*)user_tasks[iter].psp_value;
 
 		/* Full Descending, so Decrement the task pointer first, then update the value */
 		pPSP_of_task--;
 		*pPSP_of_task = DUMMY_XPSR; // 0x01000000
 
 		pPSP_of_task--;
-		*pPSP_of_task = task_handlers_for_each_task[iter];// PC of each stack
+		*pPSP_of_task = (uint32_t) user_tasks[iter].task_handler;// PC of each stack
 
 		pPSP_of_task--;
 		*pPSP_of_task = 0xFFFFFFFD; // Link registers for each task
@@ -150,7 +174,7 @@ void init_tasks_dummy_stack(void){
 			*pPSP_of_task = 0;
 		}
 
-		psp_of_each_task[iter] = (uint32_t)pPSP_of_task;
+		user_tasks[iter].psp_value = (uint32_t)pPSP_of_task;
 
 	}
 }
@@ -164,7 +188,7 @@ void enable_all_fault_handlers(void){
 }
 
 void save_psp_value_after_storing(uint32_t current_psp_stack_addr){
-	psp_of_each_task[current_task] = current_psp_stack_addr;
+	user_tasks[current_task].psp_value = current_psp_stack_addr;
 }
 
 void update_next_task(void){
@@ -172,9 +196,24 @@ void update_next_task(void){
 	current_task %= MAX_TASKS;
 }
 
-/* Handler here acts as scheduler, it performs context switching */
-__attribute__((naked)) void SysTick_Handler(void) {
+void schedule(void){
+	/* Pend the PendSV, the scheduler will run */
+	uint32_t *pICSR = (uint32_t*)0xE000ED04;
 
+	*pICSR |= (1 << 28);
+}
+
+/* Put the calling function to blocked state and trigger the scheduler*/
+void task_delay(uint32_t tick_count) {
+
+	if(current_task) {
+		user_tasks[current_task].block_count = global_tick_count + tick_count;
+		user_tasks[current_task].current_state = TASK_BLOCKED_STATE;
+		schedule();
+	}
+}
+
+__attribute__((naked)) void PendSV_Handler(void) {
 	/* Context Saving
 	 * 1. Get the current running task's PSP value.
 	 * 2. Using that PSP value, store SF2 (R4 to R11)
@@ -210,6 +249,39 @@ __attribute__((naked)) void SysTick_Handler(void) {
 	__asm volatile("POP {LR}");
 
 	__asm volatile("BX LR"); /*Manually switch back, because of naked function, prologue and epilogue is not present */
+}
+
+void update_global_tick_count(void){
+	global_tick_count++;
+}
+
+void unblock_task(void) {
+	for(int i = 1; i < MAX_TASKS; i++) {
+
+		if(user_tasks[i].current_state != TASK_RUNNING_STATE) {
+
+			if(user_tasks[i].block_count == global_tick_count) {
+
+				user_tasks[i].current_state = TASK_RUNNING_STATE;
+			}
+		}
+	}
+
+}
+
+/* Handler here acts as scheduler, it performs context switching */
+void SysTick_Handler(void) {
+
+	/*Update the global tick count*/
+	update_global_tick_count();
+
+	/* Unblock the task to run state */
+	unblock_task();
+
+	/*Pend the PendSV exception */
+	uint32_t *pICSR = (uint32_t*)0xE000ED04;
+
+	*pICSR |= (1 << 28);
 
 }
 
@@ -233,6 +305,11 @@ void UsageFault_Handler(void) {
 	while(1);
 }
 
+void idle_task(void) {
+	while(1){
+		printf("Idle Task\n");
+	}
+}
 
 void task1_handler(void) {
 
